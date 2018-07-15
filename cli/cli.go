@@ -120,7 +120,7 @@ func (p *Program) Run() {
 
 		// Run the main action _if_ we are not in the loop for the version command
 		// that is added by default.
-		if p.FlagSet.NArg() < 1 {
+		if p.FlagSet.NArg() < 2 {
 			if err := p.Action(ctx); err != nil {
 				fmt.Fprintf(os.Stderr, "%v\n", err)
 				os.Exit(1)
