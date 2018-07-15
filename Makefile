@@ -34,14 +34,14 @@ build: $(NAME) ## Builds a dynamic executable or package
 
 $(NAME): $(wildcard *.go) $(wildcard */*.go) VERSION.txt
 	@echo "+ $@"
-	$(GO) build -tags "$(BUILDTAGS)" ${GO_LDFLAGS} -o $(NAME) ./...
+	$(GO) build -tags "$(BUILDTAGS)" ${GO_LDFLAGS} ./...
 
 .PHONY: static
 static: ## Builds a static executable
 	@echo "+ $@"
 	CGO_ENABLED=0 $(GO) build \
 				-tags "$(BUILDTAGS) static_build" \
-				${GO_LDFLAGS_STATIC} -o $(NAME) ./...
+				${GO_LDFLAGS_STATIC} ./...
 
 all: clean build fmt lint test staticcheck vet install ## Runs a clean, build, fmt, lint, test, staticcheck, vet and install
 
