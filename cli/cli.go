@@ -121,7 +121,7 @@ func (p *Program) Run() {
 			command.Register(p.FlagSet)
 
 			// Override the usage text to something nicer.
-			p.resetFlagUsage(p.FlagSet, command)
+			p.resetCommandUsage(command)
 
 			// Parse the flags the user gave us.
 			if err := p.FlagSet.Parse(os.Args[2:]); err != nil {
@@ -162,7 +162,7 @@ func (p *Program) Run() {
 		}
 	}
 
-	fmt.Fprintf(os.Stderr, "%s: no such command\n", os.Args[1])
+	fmt.Fprintf(os.Stderr, "%s: no such command\n\n", os.Args[1])
 	p.usage(ctx)
 	os.Exit(1)
 }
@@ -173,8 +173,7 @@ func (p *Program) usage(ctx context.Context) error {
 
 	// Print information about the common/global flags.
 	if p.FlagSet != nil {
-		p.FlagSet.PrintDefaults()
-		fmt.Fprintln(os.Stderr)
+		resetFlagUsage(p.FlagSet)
 	}
 
 	// Print information about the commands.
@@ -193,7 +192,17 @@ func (p *Program) usage(ctx context.Context) error {
 	return nil
 }
 
-func (p *Program) resetFlagUsage(fs *flag.FlagSet, command Command) {
+func (p *Program) resetCommandUsage(command Command) {
+	p.FlagSet.Usage = func() {
+		fmt.Fprintf(os.Stderr, "Usage: %s %s %s\n", p.Name, command.Name(), command.Args())
+		fmt.Fprintln(os.Stderr)
+		fmt.Fprintln(os.Stderr, strings.TrimSpace(command.LongHelp()))
+		fmt.Fprintln(os.Stderr)
+		resetFlagUsage(p.FlagSet)
+	}
+}
+
+func resetFlagUsage(fs *flag.FlagSet) {
 	var (
 		hasFlags   bool
 		flagBlock  bytes.Buffer
@@ -215,17 +224,13 @@ func (p *Program) resetFlagUsage(fs *flag.FlagSet, command Command) {
 
 	flagWriter.Flush()
 
-	fs.Usage = func() {
-		fmt.Fprintf(os.Stderr, "Usage: %s %s %s\n", p.Name, command.Name(), command.Args())
-		fmt.Fprintln(os.Stderr)
-		fmt.Fprintln(os.Stderr, strings.TrimSpace(command.LongHelp()))
-		fmt.Fprintln(os.Stderr)
-		if hasFlags {
-			fmt.Fprintln(os.Stderr, "Flags:")
-			fmt.Fprintln(os.Stderr)
-			fmt.Fprintln(os.Stderr, flagBlock.String())
-		}
+	if !hasFlags {
+		return // Return early.
 	}
+
+	fmt.Fprintln(os.Stderr, "Flags:")
+	fmt.Fprintln(os.Stderr)
+	fmt.Fprintln(os.Stderr, flagBlock.String())
 }
 
 func defaultFlagSet(n string) *flag.FlagSet {
