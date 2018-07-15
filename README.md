@@ -5,4 +5,4 @@
 [![Github All Releases](https://img.shields.io/github/downloads/genuinetools/pkg/total.svg?style=for-the-badge)](https://github.com/genuinetools/pkg/releases)
 
 
-A home for various go packages to be imported by other projects.
+A home for various Go packages to be imported by other projects.
