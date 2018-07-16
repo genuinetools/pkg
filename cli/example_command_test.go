@@ -60,5 +60,5 @@ func ExampleNewProgram_withCommand() {
 
 	// Run our program.
 	p.Run()
-
+	// Output: yo
 }

@@ -8,9 +8,28 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	"testing"
 
 	"github.com/genuinetools/pkg/cli"
 )
+
+func TestMain(m *testing.M) {
+	flag.Parse()
+	resetForTesting()
+	os.Exit(m.Run())
+}
+
+var defaultUsage = flag.Usage
+
+// resetTesting clears all flag state and sets the usage function as directed.
+// After calling resetForTesting, parse errors in flag handling will not
+// exit the program.
+// It also resets the args passed.
+func resetForTesting() {
+	flag.CommandLine = flag.NewFlagSet(os.Args[0], flag.ContinueOnError)
+	flag.CommandLine.Usage = defaultUsage
+	os.Args = []string{"yo", "yo"}
+}
 
 func ExampleNewProgram_withSingleAction() {
 	// Create a new cli program.
@@ -58,5 +77,5 @@ func ExampleNewProgram_withSingleAction() {
 
 	// Run our program.
 	p.Run()
-
+	// Output: yo
 }
