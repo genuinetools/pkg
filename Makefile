@@ -58,7 +58,7 @@ lint: ## Verifies `golint` passes
 .PHONY: test
 test: ## Runs the go tests
 	@echo "+ $@"
-	@$(GO) test -v -tags "$(BUILDTAGS) cgo" $(shell $(GO) list ./... | grep -v vendor)
+	@$(GO) test -tags "$(BUILDTAGS) cgo" $(shell $(GO) list ./... | grep -v vendor)
 
 .PHONY: vet
 vet: ## Verifies `go vet` passes
