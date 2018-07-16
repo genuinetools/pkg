@@ -60,6 +60,7 @@ func TestProgramWithNoCommandsOrFlagsOrAction(t *testing.T) {
 	testCases := []struct {
 		description string
 		args        []string
+		expectedErr error
 	}{
 		{
 			description: "nil",
@@ -75,15 +76,14 @@ func TestProgramWithNoCommandsOrFlagsOrAction(t *testing.T) {
 		{
 			description: "args: foo bar",
 			args:        []string{"foo", "bar"},
+			expectedErr: errors.New("bar: no such command"),
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.description, func(t *testing.T) {
 			printUsage, err := p.run(context.Background(), tc.args)
-			if err != nil {
-				t.Fatalf("expected no error, got: %v", err)
-			}
+			compareErrors(t, err, tc.expectedErr)
 
 			if !printUsage {
 				t.Fatal("expected behavior was to print the usage")

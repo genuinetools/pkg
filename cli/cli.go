@@ -104,6 +104,9 @@ func (p *Program) Run() {
 }
 
 func (p *Program) run(ctx context.Context, args []string) (bool, error) {
+	// Append the version command to the list of commands by default.
+	p.Commands = append(p.Commands, &versionCommand{})
+
 	// TODO(jessfraz): Find a better way to tell that they passed -h through as a flag.
 	if len(args) > 1 &&
 		(strings.Contains(strings.ToLower(args[1]), "help") ||
@@ -114,12 +117,9 @@ func (p *Program) run(ctx context.Context, args []string) (bool, error) {
 
 	// If we do not have an action set and we have no commands, print the usage
 	// and exit.
-	if p.Action == nil && len(p.Commands) < 1 {
+	if p.Action == nil && len(p.Commands) < 2 {
 		return true, nil
 	}
-
-	// Append the version command to the list of commands by default.
-	p.Commands = append(p.Commands, &versionCommand{})
 
 	// Check if the command exists.
 	var commandExists bool
