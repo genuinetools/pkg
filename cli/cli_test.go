@@ -218,6 +218,7 @@ Flags:
 
   -d, --debug  enable debug logging (default: false)
   -o           where to save the output (default: defaultOutput)
+  -t, --thing  a flag for thing (default: false)
   --token      API token (default: <none>)
 
 Commands:
@@ -236,6 +237,7 @@ Flags:
 
   -d, --debug  enable debug logging (default: false)
   -o           where to save the output (default: defaultOutput)
+  -t, --thing  a flag for thing (default: false)
   --token      API token (default: <none>)
 
 `
@@ -254,6 +256,8 @@ Flags:
 	p.FlagSet = flag.NewFlagSet("global", flag.ExitOnError)
 	p.FlagSet.StringVar(&token, "token", "", "API token")
 	p.FlagSet.StringVar(&output, "o", "defaultOutput", "where to save the output")
+	p.FlagSet.BoolVar(&debug, "thing", false, "a flag for thing")
+	p.FlagSet.BoolVar(&debug, "t", false, "a flag for thing")
 	p.FlagSet.BoolVar(&debug, "d", false, "enable debug logging")
 	p.FlagSet.BoolVar(&debug, "debug", false, "enable debug logging")
 
