@@ -176,7 +176,9 @@ func (p *Program) run(ctx context.Context, args []string) (bool, error) {
 				return false, flag.ErrHelp
 			}
 
-			if p.Before != nil {
+			// Only execute the Before function for user-supplied commands.
+			// This excludes the version command we supply.
+			if p.Before != nil && command.Name() != "version" {
 				if err := p.Before(ctx); err != nil {
 					return false, err
 				}

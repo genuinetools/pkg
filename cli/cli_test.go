@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -44,17 +45,22 @@ var (
 		return errExpected
 	}
 
-	versionExpected = "ship:\n version"
+	versionCommandExpectedStdout = fmt.Sprintf(`ship:
+ version     : 0.0.0
+ git hash    :`+" "+`
+ go version  : %s
+ go compiler : %s
+ platform    : %s/%s
+`, runtime.Version(), runtime.Compiler, runtime.GOOS, runtime.GOARCH)
 )
 
 type testCase struct {
-	description        string
-	args               []string
-	shouldPrintUsage   bool
-	shouldPrintVersion bool
-	expectedErr        error
-	expectedStderr     string
-	expectedStdout     string
+	description      string
+	args             []string
+	shouldPrintUsage bool
+	expectedErr      error
+	expectedStderr   string
+	expectedStdout   string
 }
 
 // Define the testCommand.
@@ -141,19 +147,19 @@ func testCasesWithCommands() []testCase {
 			expectedErr: errExpectedFromCommand,
 		},
 		{
-			description:        "args: foo version",
-			args:               []string{"foo", "version"},
-			shouldPrintVersion: true,
+			description:    "args: foo version",
+			args:           []string{"foo", "version"},
+			expectedStdout: versionCommandExpectedStdout,
 		},
 		{
-			description:        "args: foo version foo",
-			args:               []string{"foo", "version", "foo"},
-			shouldPrintVersion: true,
+			description:    "args: foo version foo",
+			args:           []string{"foo", "version", "foo"},
+			expectedStdout: versionCommandExpectedStdout,
 		},
 		{
-			description:        "args: foo version foo bar",
-			args:               []string{"foo", "version", "foo", "bar"},
-			shouldPrintVersion: true,
+			description:    "args: foo version foo bar",
+			args:           []string{"foo", "version", "foo", "bar"},
+			expectedStdout: versionCommandExpectedStdout,
 		},
 	}
 }
@@ -589,15 +595,9 @@ func (p *Program) doTestRun(t *testing.T, tc testCase) {
 		t.Fatalf("expected no stderr, got: %s", stderr)
 	}
 
-	// IF
-	// we DON'T EXPECT and error on Before
-	// AND
-	// we EXPECT the version to be printed
-	// THEN
-	// check that the version was actually printed.
-	if !p.isErrorOnBefore() &&
-		tc.shouldPrintVersion && !strings.HasPrefix(stdout, versionExpected) {
-		t.Fatalf("expected output to start with %q, got %q", versionExpected, stdout)
+	// Check that the stdout is what we expected.
+	if !strings.HasPrefix(stdout, tc.expectedStdout) {
+		t.Fatalf("expected stdout: %q\ngot: %q", tc.expectedStdout, stdout)
 	}
 
 	// IF
