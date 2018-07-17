@@ -10,6 +10,8 @@ import (
 	"os"
 	"strings"
 	"testing"
+
+	"github.com/genuinetools/img/version"
 )
 
 const (
@@ -202,6 +204,93 @@ func testCasesWithAction() []testCase {
 	}
 }
 
+func TestProgramUsage(t *testing.T) {
+	var (
+		debug  bool
+		token  string
+		output string
+
+		expectedOutput = `sample -  My sample command line tool.
+
+Usage: sample <command>
+
+Flags:
+
+  -d, --debug  enable debug logging (default: false)
+  -o           where to save the output (default: defaultOutput)
+  --token      API token (default: <none>)
+
+Commands:
+
+  error    Show the test information.
+  test     Show the test information.
+  version  Show the version information.
+
+`
+
+		expectedVersionOutput = `Usage: sample version` + " " + `
+
+Show the version information.
+
+Flags:
+
+  -d, --debug  enable debug logging (default: false)
+  -o           where to save the output (default: defaultOutput)
+  --token      API token (default: <none>)
+
+`
+	)
+
+	// Setup the program.
+	p := NewProgram()
+	p.Name = "sample"
+	p.Description = "My sample command line tool"
+
+	// Set the GitCommit and Version.
+	p.GitCommit = version.GITCOMMIT
+	p.Version = version.VERSION
+
+	// Setup the global flags.
+	p.FlagSet = flag.NewFlagSet("global", flag.ExitOnError)
+	p.FlagSet.StringVar(&token, "token", "", "API token")
+	p.FlagSet.StringVar(&output, "o", "defaultOutput", "where to save the output")
+	p.FlagSet.BoolVar(&debug, "d", false, "enable debug logging")
+	p.FlagSet.BoolVar(&debug, "debug", false, "enable debug logging")
+
+	p.Commands = []Command{
+		&errorCommand{},
+		&testCommand{},
+	}
+	p.Action = nilActionFunction
+
+	p.Run()
+
+	c := startCapture(t)
+	if err := p.usage(p.defaultContext()); err != nil {
+		t.Fatal(err)
+	}
+	stdout, stderr := c.finish()
+	if stderr != expectedOutput {
+		t.Fatalf("expected: %s\ngot: %s", expectedOutput, stderr)
+	}
+	if len(stdout) > 0 {
+		t.Fatalf("expected no stdout, got: %s", stdout)
+	}
+
+	// Test versionCommand.
+	vcmd := &versionCommand{}
+	c = startCapture(t)
+	p.resetCommandUsage(vcmd)
+	p.FlagSet.Usage()
+	stdout, stderr = c.finish()
+	if stderr != expectedVersionOutput {
+		t.Fatalf("expected: %q\ngot: %q", expectedVersionOutput, stderr)
+	}
+	if len(stdout) > 0 {
+		t.Fatalf("expected no stdout, got: %s", stdout)
+	}
+}
+
 func TestProgramWithNoCommandsOrFlagsOrAction(t *testing.T) {
 	p := NewProgram()
 	testCases := append(testCasesEmpty(), testCasesUndefinedCommand()...)
@@ -231,13 +320,9 @@ func TestProgramHelpFlag(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.description, func(t *testing.T) {
-			// Create the context with the values we need to pass to the version command.
-			ctx := context.WithValue(context.Background(), GitCommitKey, p.GitCommit)
-			ctx = context.WithValue(ctx, VersionKey, p.Version)
-
 			c := startCapture(t)
-			printUsage, err := p.run(ctx, tc.args)
-			stdout, _ := c.finish()
+			printUsage, err := p.run(p.defaultContext(), tc.args)
+			stdout, stderr := c.finish()
 			if strings.Contains(stdout, versionExpected) {
 				t.Fatalf("did not expect version information to print, got %s", stdout)
 			}
@@ -246,6 +331,9 @@ func TestProgramHelpFlag(t *testing.T) {
 			}
 			if !printUsage {
 				t.Fatal("expected printUsage to be true")
+			}
+			if len(stderr) > 0 {
+				t.Fatalf("expected no stderr, got: %s", stderr)
 			}
 		})
 	}
@@ -435,13 +523,12 @@ func (p *Program) isErrorOnAfter() bool {
 }
 
 func (p *Program) doTestRun(t *testing.T, tc testCase) {
-	// Create the context with the values we need to pass to the version command.
-	ctx := context.WithValue(context.Background(), GitCommitKey, p.GitCommit)
-	ctx = context.WithValue(ctx, VersionKey, p.Version)
-
 	c := startCapture(t)
-	printUsage, err := p.run(ctx, tc.args)
-	stdout, _ := c.finish()
+	printUsage, err := p.run(p.defaultContext(), tc.args)
+	stdout, stderr := c.finish()
+	if len(stderr) > 0 {
+		t.Fatalf("expected no stderr, got: %s", stderr)
+	}
 
 	// IF
 	// we DON'T EXPECT and error on Before

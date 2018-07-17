@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"text/tabwriter"
 )
@@ -80,9 +81,7 @@ func NewProgram() *Program {
 // Run is the entry point for the program. It parses the arguments and executes
 // the commands.
 func (p *Program) Run() {
-	// Create the context with the values we need to pass to the version command.
-	ctx := context.WithValue(context.Background(), GitCommitKey, p.GitCommit)
-	ctx = context.WithValue(ctx, VersionKey, p.Version)
+	ctx := p.defaultContext()
 
 	// Pass the os.Args through so we can more easily unit test.
 	printUsage, err := p.run(ctx, os.Args)
@@ -284,13 +283,23 @@ func (p *Program) resetCommandUsage(command Command) {
 type mflag struct {
 	name     string
 	defValue string
+	usage    string
+}
+
+// byName implements sort.Interface for []mflag based on the name field.
+type byName []mflag
+
+func (n byName) Len() int      { return len(n) }
+func (n byName) Swap(i, j int) { n[i], n[j] = n[j], n[i] }
+func (n byName) Less(i, j int) bool {
+	return strings.TrimPrefix(n[i].name, "-") < strings.TrimPrefix(n[j].name, "-")
 }
 
 func resetFlagUsage(fs *flag.FlagSet) {
 	var (
 		hasFlags   bool
 		flagBlock  bytes.Buffer
-		flagMap    = map[string]mflag{}
+		flagMap    = []mflag{}
 		flagWriter = tabwriter.NewWriter(&flagBlock, 0, 4, 2, ' ', 0)
 	)
 
@@ -312,32 +321,32 @@ func resetFlagUsage(fs *flag.FlagSet) {
 
 		// Try and find duplicates (or the shortcode flags and combine them.
 		// Like: -, --password
-		v, ok := flagMap[f.Usage]
-		if !ok {
-			flagMap[f.Usage] = mflag{
-				name:     name,
-				defValue: defValue,
+		for k, v := range flagMap {
+			if v.usage == f.Usage {
+				if len(v.name) <= 2 {
+					// We already had the shortcode, let's append.
+					v.name = fmt.Sprintf("%s, -%s", v.name, name)
+				} else {
+					v.name = fmt.Sprintf("%s, -%s", name, v.name)
+				}
+				flagMap[k].name = v.name
+
+				// Return here.
+				return
 			}
-
-			// Return here.
-			return
 		}
 
-		if len(v.name) <= 2 {
-			// We already had the shortcode, let's append.
-			v.name = fmt.Sprintf("%s, -%s", v.name, name)
-		} else {
-			v.name = fmt.Sprintf("%s, -%s", name, v.name)
-		}
-
-		flagMap[f.Usage] = mflag{
-			name:     v.name,
+		flagMap = append(flagMap, mflag{
+			name:     name,
 			defValue: defValue,
-		}
+			usage:    f.Usage,
+		})
 	})
 
-	for desc, fm := range flagMap {
-		fmt.Fprintf(flagWriter, "\t-%s\t%s (default: %s)\n", fm.name, desc, fm.defValue)
+	// Sort by name and preserve order on output.
+	sort.Sort(byName(flagMap))
+	for i := 0; i < len(flagMap); i++ {
+		fmt.Fprintf(flagWriter, "\t-%s\t%s (default: %s)\n", flagMap[i].name, flagMap[i].usage, flagMap[i].defValue)
 	}
 
 	flagWriter.Flush()
@@ -376,4 +385,10 @@ func contains(match, a []string) bool {
 		}
 	}
 	return false
+}
+
+func (p *Program) defaultContext() context.Context {
+	// Create the context with the values we need to pass to the version command.
+	ctx := context.WithValue(context.Background(), GitCommitKey, p.GitCommit)
+	return context.WithValue(ctx, VersionKey, p.Version)
 }
