@@ -117,7 +117,7 @@ func (p *Program) run(ctx context.Context, args []string) (bool, error) {
 	if args == nil ||
 		len(args) < 1 ||
 		(len(args) > 1 && contains([]string{"-h", "--help", "help"}, args[1])) {
-		return true, nil
+		return true, flag.ErrHelp
 	}
 
 	// If we do not have an action set and we have no commands, print the usage
@@ -166,6 +166,14 @@ func (p *Program) run(ctx context.Context, args []string) (bool, error) {
 			// Parse the flags the user gave us.
 			if err := p.FlagSet.Parse(args[2:]); err != nil {
 				return false, err
+			}
+
+			// Check that they didn't add a -h or --help flag after the subcommand's
+			// commands, like `cmd sub other thing -h`.
+			if contains([]string{"-h", "--help"}, args...) {
+				// Print the flag usage and exit.
+				p.FlagSet.Usage()
+				return false, flag.ErrHelp
 			}
 
 			if p.Before != nil {
@@ -371,11 +379,14 @@ func in(a string, c []Command) bool {
 	return false
 }
 
-func contains(match []string, s string) bool {
-	// Iterate over the items to match.
-	for _, m := range match {
-		if s == m {
-			return true
+func contains(match []string, a ...string) bool {
+	// Iterate over the items in the slice.
+	for _, s := range a {
+		// Iterate over the items to match.
+		for _, m := range match {
+			if s == m {
+				return true
+			}
 		}
 	}
 	return false
