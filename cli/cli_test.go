@@ -85,187 +85,6 @@ func (cmd *errorCommand) Hidden() bool                                 { return 
 func (cmd *errorCommand) Register(fs *flag.FlagSet)                    {}
 func (cmd *errorCommand) Run(ctx context.Context, args []string) error { return errExpectedFromCommand }
 
-func testCasesEmpty() []testCase {
-	return []testCase{
-		{
-			description:      "nil",
-			shouldPrintUsage: true,
-			expectedErr:      flag.ErrHelp,
-		},
-		{
-			description:      "empty",
-			args:             []string{},
-			shouldPrintUsage: true,
-			expectedErr:      flag.ErrHelp,
-		},
-	}
-}
-
-func testCasesUndefinedCommand() []testCase {
-	return []testCase{
-		{
-			description:      "args: foo",
-			args:             []string{"foo"},
-			shouldPrintUsage: true,
-		},
-		{
-			description:      "args: foo bar",
-			args:             []string{"foo", "bar"},
-			shouldPrintUsage: true,
-			expectedErr:      errors.New("bar: no such command"),
-		},
-	}
-}
-
-func testCasesWithCommands() []testCase {
-	return []testCase{
-		{
-			description: "args: foo test",
-			args:        []string{"foo", "test"},
-		},
-		{
-			description: "args: foo test foo",
-			args:        []string{"foo", "test", "foo"},
-		},
-		{
-			description: "args: foo test foo bar",
-			args:        []string{"foo", "test", "foo", "bar"},
-		},
-		{
-			description: "args: foo error",
-			args:        []string{"foo", "error"},
-			expectedErr: errExpectedFromCommand,
-		},
-		{
-			description: "args: foo error foo",
-			args:        []string{"foo", "error", "foo"},
-			expectedErr: errExpectedFromCommand,
-		},
-		{
-			description: "args: foo error foo bar",
-			args:        []string{"foo", "error", "foo", "bar"},
-			expectedErr: errExpectedFromCommand,
-		},
-		{
-			description:    "args: foo version",
-			args:           []string{"foo", "version"},
-			expectedStdout: versionCommandExpectedStdout,
-		},
-		{
-			description:    "args: foo version foo",
-			args:           []string{"foo", "version", "foo"},
-			expectedStdout: versionCommandExpectedStdout,
-		},
-		{
-			description:    "args: foo version foo bar",
-			args:           []string{"foo", "version", "foo", "bar"},
-			expectedStdout: versionCommandExpectedStdout,
-		},
-	}
-}
-
-func testCasesHelp() []testCase {
-	return []testCase{
-		{
-			description:      "args: foo --help",
-			args:             []string{"foo", "--help"},
-			expectedErr:      flag.ErrHelp,
-			shouldPrintUsage: true,
-		},
-		{
-			description:      "args: foo help",
-			args:             []string{"foo", "help"},
-			expectedErr:      flag.ErrHelp,
-			shouldPrintUsage: true,
-		},
-		{
-			description:      "args: foo -h",
-			args:             []string{"foo", "-h"},
-			expectedErr:      flag.ErrHelp,
-			shouldPrintUsage: true,
-		},
-		{
-			description:      "args: foo -h test foo",
-			args:             []string{"foo", "-h", "test", "foo"},
-			expectedErr:      flag.ErrHelp,
-			shouldPrintUsage: true,
-		},
-		{
-			description:      "args: foo help bar --thing",
-			args:             []string{"foo", "help", "bar", "--thing"},
-			expectedErr:      flag.ErrHelp,
-			shouldPrintUsage: true,
-		},
-		{
-			description:      "args: foo bar --help",
-			args:             []string{"foo", "bar", "--help"},
-			expectedErr:      errors.New("bar: no such command"),
-			shouldPrintUsage: true,
-		},
-		{
-			description:    "args: foo test --help",
-			args:           []string{"foo", "test", "--help"},
-			expectedErr:    flag.ErrHelp,
-			expectedStderr: testCommandExpectedHelp,
-		},
-		{
-			description:    "args: foo error -h",
-			args:           []string{"foo", "error", "-h"},
-			expectedErr:    flag.ErrHelp,
-			expectedStderr: errorCommandExpectedHelp,
-		},
-		{
-			description:    "args: foo error foo --help",
-			args:           []string{"foo", "error", "foo", "--help"},
-			expectedErr:    flag.ErrHelp,
-			expectedStderr: errorCommandExpectedHelp,
-		},
-		{
-			description:    "args: foo error foo bar --help",
-			args:           []string{"foo", "error", "foo", "bar", "--help"},
-			expectedErr:    flag.ErrHelp,
-			expectedStderr: errorCommandExpectedHelp,
-		},
-		{
-			description:    "args: foo version --help",
-			args:           []string{"foo", "version", "--help"},
-			expectedErr:    flag.ErrHelp,
-			expectedStderr: versionCommandExpectedHelp,
-		},
-		{
-			description:    "args: foo version -h",
-			args:           []string{"foo", "version", "-h"},
-			expectedErr:    flag.ErrHelp,
-			expectedStderr: versionCommandExpectedHelp,
-		},
-		{
-			description:    "args: foo version --help another",
-			args:           []string{"foo", "version", "--help", "another"},
-			expectedErr:    flag.ErrHelp,
-			expectedStderr: versionCommandExpectedHelp,
-		},
-		{
-			description:    "args: foo version -h another",
-			args:           []string{"foo", "version", "-h", "another"},
-			expectedErr:    flag.ErrHelp,
-			expectedStderr: versionCommandExpectedHelp,
-		},
-	}
-}
-
-func testCasesWithAction() []testCase {
-	return []testCase{
-		{
-			description: "args: foo",
-			args:        []string{"foo"},
-		},
-		{
-			description: "args: foo bar",
-			args:        []string{"foo", "bar"},
-		},
-	}
-}
-
 func TestProgramUsage(t *testing.T) {
 	var (
 		debug  bool
@@ -388,12 +207,9 @@ func TestProgramHelpFlag(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.description, func(t *testing.T) {
 			c := startCapture(t)
-			printUsage, err := p.run(p.defaultContext(), tc.args)
+			err := p.run(p.defaultContext(), tc.args)
 			stdout, stderr := c.finish()
 			compareErrors(t, err, tc.expectedErr)
-			if printUsage != tc.shouldPrintUsage {
-				t.Fatalf("expected printUsage to be %t, got: %t", tc.shouldPrintUsage, printUsage)
-			}
 			if tc.expectedStderr != stderr {
 				t.Fatalf("expected stderr: %q\ngot: %q", tc.expectedStderr, stderr)
 			}
@@ -587,9 +403,15 @@ func (p *Program) isErrorOnAfter() bool {
 	return p.After != nil && p.After(context.Background()) != nil
 }
 
+func (tc *testCase) expectUsageToBePrintedBeforeBefore(p *Program) bool {
+	return tc.args == nil || len(tc.args) < 1 ||
+		(p.Action == nil && len(p.Commands) > 1 && len(tc.args) < 2) ||
+		(tc.expectedErr != nil && strings.Contains(tc.expectedErr.Error(), "no such command"))
+}
+
 func (p *Program) doTestRun(t *testing.T, tc testCase) {
 	c := startCapture(t)
-	printUsage, err := p.run(p.defaultContext(), tc.args)
+	err := p.run(p.defaultContext(), tc.args)
 	stdout, stderr := c.finish()
 	if len(stderr) > 0 {
 		t.Fatalf("expected no stderr, got: %s", stderr)
@@ -609,7 +431,7 @@ func (p *Program) doTestRun(t *testing.T, tc testCase) {
 	// THEN
 	// check we got the expected error defined in the testcase.
 	if (!p.isErrorOnAfter() && !p.isErrorOnBefore()) ||
-		tc.shouldPrintUsage ||
+		tc.expectUsageToBePrintedBeforeBefore(p) ||
 		(!p.isErrorOnBefore() && p.isErrorOnAfter() && tc.expectedErr == errExpectedFromCommand) {
 		compareErrors(t, err, tc.expectedErr)
 	}
@@ -624,11 +446,7 @@ func (p *Program) doTestRun(t *testing.T, tc testCase) {
 	// check we got the expected error from Before/After.
 	if (p.isErrorOnBefore() ||
 		(p.isErrorOnAfter() && tc.expectedErr != errExpectedFromCommand)) &&
-		!tc.shouldPrintUsage {
+		!tc.expectUsageToBePrintedBeforeBefore(p) {
 		compareErrors(t, err, errExpected)
-	}
-
-	if printUsage != tc.shouldPrintUsage {
-		t.Fatalf("expected printUsage to be %t got %t", tc.shouldPrintUsage, printUsage)
 	}
 }
