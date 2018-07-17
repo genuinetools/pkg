@@ -10,8 +10,6 @@ import (
 	"os"
 	"strings"
 	"testing"
-
-	"github.com/genuinetools/img/version"
 )
 
 const (
@@ -247,10 +245,6 @@ Flags:
 	p := NewProgram()
 	p.Name = "sample"
 	p.Description = "My sample command line tool"
-
-	// Set the GitCommit and Version.
-	p.GitCommit = version.GITCOMMIT
-	p.Version = version.VERSION
 
 	// Setup the global flags.
 	p.FlagSet = flag.NewFlagSet("global", flag.ExitOnError)
