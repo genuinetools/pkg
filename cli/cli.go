@@ -107,11 +107,20 @@ func (p *Program) run(ctx context.Context, args []string) (bool, error) {
 	// Append the version command to the list of commands by default.
 	p.Commands = append(p.Commands, &versionCommand{})
 
-	// TODO(jessfraz): Find a better way to tell that they passed -h through as a flag.
-	if len(args) > 1 &&
-		(strings.Contains(strings.ToLower(args[1]), "help") ||
-			strings.ToLower(args[1]) == "-h") ||
-		args == nil || len(args) < 1 {
+	// IF
+	// args is <nil>
+	// OR
+	// args is less than zero
+	// OR
+	// args contains a help flag
+	// OR
+	// we have more than one arg and it equals help
+	// THEN
+	// printUsage
+	if args == nil ||
+		len(args) < 1 ||
+		contains([]string{"-h", "--help"}, args) ||
+		(len(args) > 1 && args[1] == "help") {
 		return true, nil
 	}
 
@@ -351,6 +360,19 @@ func in(a string, c []Command) bool {
 	for _, b := range c {
 		if b.Name() == a {
 			return true
+		}
+	}
+	return false
+}
+
+func contains(match, a []string) bool {
+	// Iterate over the items in the slice.
+	for _, s := range a {
+		// Iterate over the items to match.
+		for _, m := range match {
+			if s == m {
+				return true
+			}
 		}
 	}
 	return false

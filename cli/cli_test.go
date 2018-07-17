@@ -1,10 +1,14 @@
 package cli
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"flag"
 	"fmt"
+	"io"
+	"os"
+	"strings"
 	"testing"
 )
 
@@ -25,81 +29,42 @@ var (
 	errFunction            = func(ctx context.Context) error {
 		return errExpected
 	}
+
+	versionExpected = "ship:\n version"
 )
 
-func (cmd *testCommand) Name() string      { return "test" }
-func (cmd *testCommand) Args() string      { return "" }
-func (cmd *testCommand) ShortHelp() string { return testHelp }
-func (cmd *testCommand) LongHelp() string  { return testHelp }
-func (cmd *testCommand) Hidden() bool      { return false }
+type testCase struct {
+	description        string
+	args               []string
+	shouldPrintUsage   bool
+	shouldPrintVersion bool
+	expectedErr        error
+}
 
-func (cmd *testCommand) Register(fs *flag.FlagSet) {}
-
+// Define the testCommand.
 type testCommand struct{}
 
-func (cmd *testCommand) Run(ctx context.Context, args []string) error {
-	return nil
-}
+func (cmd *testCommand) Name() string                                 { return "test" }
+func (cmd *testCommand) Args() string                                 { return "" }
+func (cmd *testCommand) ShortHelp() string                            { return testHelp }
+func (cmd *testCommand) LongHelp() string                             { return testHelp }
+func (cmd *testCommand) Hidden() bool                                 { return false }
+func (cmd *testCommand) Register(fs *flag.FlagSet)                    {}
+func (cmd *testCommand) Run(ctx context.Context, args []string) error { return nil }
 
-func (cmd *errorCommand) Name() string      { return "error" }
-func (cmd *errorCommand) Args() string      { return "" }
-func (cmd *errorCommand) ShortHelp() string { return testHelp }
-func (cmd *errorCommand) LongHelp() string  { return testHelp }
-func (cmd *errorCommand) Hidden() bool      { return false }
-
-func (cmd *errorCommand) Register(fs *flag.FlagSet) {}
-
+// Define the errorCommand.
 type errorCommand struct{}
 
-func (cmd *errorCommand) Run(ctx context.Context, args []string) error {
-	return errExpectedFromCommand
-}
+func (cmd *errorCommand) Name() string                                 { return "error" }
+func (cmd *errorCommand) Args() string                                 { return "" }
+func (cmd *errorCommand) ShortHelp() string                            { return testHelp }
+func (cmd *errorCommand) LongHelp() string                             { return testHelp }
+func (cmd *errorCommand) Hidden() bool                                 { return false }
+func (cmd *errorCommand) Register(fs *flag.FlagSet)                    {}
+func (cmd *errorCommand) Run(ctx context.Context, args []string) error { return errExpectedFromCommand }
 
-func TestProgramWithNoCommandsOrFlagsOrAction(t *testing.T) {
-	p := NewProgram()
-	testCases := []struct {
-		description string
-		args        []string
-		expectedErr error
-	}{
-		{
-			description: "nil",
-		},
-		{
-			description: "empty",
-			args:        []string{},
-		},
-		{
-			description: "args: foo",
-			args:        []string{"foo"},
-		},
-		{
-			description: "args: foo bar",
-			args:        []string{"foo", "bar"},
-			expectedErr: errors.New("bar: no such command"),
-		},
-	}
-
-	for _, tc := range testCases {
-		t.Run(tc.description, func(t *testing.T) {
-			printUsage, err := p.run(context.Background(), tc.args)
-			compareErrors(t, err, tc.expectedErr)
-
-			if !printUsage {
-				t.Fatal("expected behavior was to print the usage")
-			}
-		})
-	}
-}
-
-func TestProgramWithNoCommandsOrFlags(t *testing.T) {
-	p := NewProgram()
-	p.Action = nilActionFunction
-	testCases := []struct {
-		description      string
-		args             []string
-		shouldPrintUsage bool
-	}{
+func testCasesEmpty() []testCase {
+	return []testCase{
 		{
 			description:      "nil",
 			shouldPrintUsage: true,
@@ -109,27 +74,178 @@ func TestProgramWithNoCommandsOrFlags(t *testing.T) {
 			args:             []string{},
 			shouldPrintUsage: true,
 		},
+	}
+}
+
+func testCasesUndefinedCommand() []testCase {
+	return []testCase{
 		{
 			description:      "args: foo",
 			args:             []string{"foo"},
-			shouldPrintUsage: false,
+			shouldPrintUsage: true,
 		},
 		{
 			description:      "args: foo bar",
 			args:             []string{"foo", "bar"},
-			shouldPrintUsage: false,
+			shouldPrintUsage: true,
+			expectedErr:      errors.New("bar: no such command"),
 		},
 	}
+}
+
+func testCasesWithCommands() []testCase {
+	return []testCase{
+		{
+			description: "args: foo test",
+			args:        []string{"foo", "test"},
+		},
+		{
+			description: "args: foo test foo",
+			args:        []string{"foo", "test", "foo"},
+		},
+		{
+			description: "args: foo test foo bar",
+			args:        []string{"foo", "test", "foo", "bar"},
+		},
+		{
+			description: "args: foo error",
+			args:        []string{"foo", "error"},
+			expectedErr: errExpectedFromCommand,
+		},
+		{
+			description: "args: foo error foo",
+			args:        []string{"foo", "error", "foo"},
+			expectedErr: errExpectedFromCommand,
+		},
+		{
+			description: "args: foo error foo bar",
+			args:        []string{"foo", "error", "foo", "bar"},
+			expectedErr: errExpectedFromCommand,
+		},
+		{
+			description:        "args: foo version",
+			args:               []string{"foo", "version"},
+			shouldPrintVersion: true,
+		},
+		{
+			description:        "args: foo version foo",
+			args:               []string{"foo", "version", "foo"},
+			shouldPrintVersion: true,
+		},
+		{
+			description:        "args: foo version foo bar",
+			args:               []string{"foo", "version", "foo", "bar"},
+			shouldPrintVersion: true,
+		},
+	}
+}
+
+func testCasesHelp() []testCase {
+	return []testCase{
+		{
+			description: "args: foo --help",
+			args:        []string{"foo", "--help"},
+		},
+		{
+			description: "args: foo help",
+			args:        []string{"foo", "help"},
+		},
+		{
+			description: "args: foo help bar --thing",
+			args:        []string{"foo", "help", "bar", "--thing"},
+		},
+		{
+			description: "args: foo bar --help",
+			args:        []string{"foo", "bar", "--help"},
+		},
+		{
+			description: "args: foo test --help",
+			args:        []string{"foo", "test", "--help"},
+		},
+		{
+			description: "args: foo -h test foo",
+			args:        []string{"foo", "-h", "test", "foo", "--help"},
+		},
+		{
+			description: "args: foo error -h",
+			args:        []string{"foo", "error", "-h"},
+		},
+		{
+			description: "args: foo error foo --help",
+			args:        []string{"foo", "error", "foo", "--help"},
+		},
+		{
+			description: "args: foo error foo bar --help",
+			args:        []string{"foo", "error", "foo", "bar", "--help"},
+		},
+		{
+			description: "args: foo version foo --help",
+			args:        []string{"foo", "version", "foo", "--help"},
+		},
+		{
+			description: "args: foo version foo bar -h",
+			args:        []string{"foo", "version", "foo", "bar", "-h"},
+		},
+	}
+}
+
+func testCasesWithAction() []testCase {
+	return []testCase{
+		{
+			description: "args: foo",
+			args:        []string{"foo"},
+		},
+		{
+			description: "args: foo bar",
+			args:        []string{"foo", "bar"},
+		},
+	}
+}
+
+func TestProgramWithNoCommandsOrFlagsOrAction(t *testing.T) {
+	p := NewProgram()
+	testCases := append(testCasesEmpty(), testCasesUndefinedCommand()...)
 
 	for _, tc := range testCases {
 		t.Run(tc.description, func(t *testing.T) {
-			printUsage, err := p.run(context.Background(), tc.args)
-			if err != nil {
-				t.Fatalf("expected no error, got: %v", err)
-			}
+			p.doTestRun(t, tc)
+		})
+	}
+}
 
-			if printUsage != tc.shouldPrintUsage {
-				t.Fatalf("expected printUsage to be %t got %t", tc.shouldPrintUsage, printUsage)
+func TestProgramWithNoCommandsOrFlags(t *testing.T) {
+	p := NewProgram()
+	p.Action = nilActionFunction
+	testCases := append(testCasesEmpty(), testCasesWithAction()...)
+
+	for _, tc := range testCases {
+		t.Run(tc.description, func(t *testing.T) {
+			p.doTestRun(t, tc)
+		})
+	}
+}
+
+func TestProgramHelpFlag(t *testing.T) {
+	p := NewProgram()
+	testCases := testCasesHelp()
+
+	for _, tc := range testCases {
+		t.Run(tc.description, func(t *testing.T) {
+			// Create the context with the values we need to pass to the version command.
+			ctx := context.WithValue(context.Background(), GitCommitKey, p.GitCommit)
+			ctx = context.WithValue(ctx, VersionKey, p.Version)
+
+			c := startCapture(t)
+			printUsage, err := p.run(ctx, tc.args)
+			stdout, _ := c.finish()
+			if strings.Contains(stdout, versionExpected) {
+				t.Fatalf("did not expect version information to print, got %s", stdout)
+			}
+			if err != nil {
+				t.Fatalf("expected no error from run, got %v", err)
+			}
+			if !printUsage {
+				t.Fatal("expected printUsage to be true")
 			}
 		})
 	}
@@ -142,98 +258,13 @@ func TestProgramWithCommandsAndAction(t *testing.T) {
 		&testCommand{},
 	}
 	p.Action = nilActionFunction
-	testCases := []struct {
-		description      string
-		args             []string
-		shouldPrintUsage bool
-		expectedErr      error
-	}{
-		{
-			description:      "nil",
-			shouldPrintUsage: true,
-		},
-		{
-			description:      "empty",
-			args:             []string{},
-			shouldPrintUsage: true,
-		},
-		{
-			description:      "args: foo",
-			args:             []string{"foo"},
-			shouldPrintUsage: false,
-		},
-		{
-			description:      "args: foo bar",
-			args:             []string{"foo", "bar"},
-			shouldPrintUsage: false,
-		},
-		{
-			description:      "args: foo test",
-			args:             []string{"foo", "test"},
-			shouldPrintUsage: false,
-		},
-		{
-			description:      "args: foo test foo",
-			args:             []string{"foo", "test", "foo"},
-			shouldPrintUsage: false,
-		},
-		{
-			description:      "args: foo test foo bar",
-			args:             []string{"foo", "test", "foo", "bar"},
-			shouldPrintUsage: false,
-		},
-		{
-			description:      "args: foo error",
-			args:             []string{"foo", "error"},
-			shouldPrintUsage: false,
-			expectedErr:      errExpectedFromCommand,
-		},
-		{
-			description:      "args: foo error foo",
-			args:             []string{"foo", "error", "foo"},
-			shouldPrintUsage: false,
-			expectedErr:      errExpectedFromCommand,
-		},
-		{
-			description:      "args: foo error foo bar",
-			args:             []string{"foo", "error", "foo", "bar"},
-			shouldPrintUsage: false,
-			expectedErr:      errExpectedFromCommand,
-		},
-		{
-			description:      "args: foo version",
-			args:             []string{"foo", "version"},
-			shouldPrintUsage: false,
-		},
-		{
-			description:      "args: foo version foo",
-			args:             []string{"foo", "version", "foo"},
-			shouldPrintUsage: false,
-		},
-		{
-			description:      "args: foo version foo bar",
-			args:             []string{"foo", "version", "foo", "bar"},
-			shouldPrintUsage: false,
-		},
-		/*{
-			description:      "args: foo version --help",
-			args:             []string{"foo", "version", "--help"},
-			shouldPrintUsage: true,
-		},*/
-	}
-
-	// Create the context with the values we need to pass to the version command.
-	ctx := context.WithValue(context.Background(), GitCommitKey, p.GitCommit)
-	ctx = context.WithValue(ctx, VersionKey, p.Version)
+	testCases := append(append(testCasesEmpty(),
+		testCasesWithCommands()...),
+		testCasesWithAction()...)
 
 	for _, tc := range testCases {
 		t.Run(tc.description, func(t *testing.T) {
-			printUsage, err := p.run(ctx, tc.args)
-			compareErrors(t, err, tc.expectedErr)
-
-			if printUsage != tc.shouldPrintUsage {
-				t.Fatalf("expected printUsage to be %t got %t", tc.shouldPrintUsage, printUsage)
-			}
+			p.doTestRun(t, tc)
 		})
 	}
 
@@ -241,12 +272,7 @@ func TestProgramWithCommandsAndAction(t *testing.T) {
 	p.Before = nilFunction
 	for _, tc := range testCases {
 		t.Run(fmt.Sprintf("with Successful Before -> %s", tc.description), func(t *testing.T) {
-			printUsage, err := p.run(ctx, tc.args)
-			compareErrors(t, err, tc.expectedErr)
-
-			if printUsage != tc.shouldPrintUsage {
-				t.Fatalf("expected printUsage to be %t got %t", tc.shouldPrintUsage, printUsage)
-			}
+			p.doTestRun(t, tc)
 		})
 	}
 
@@ -254,12 +280,7 @@ func TestProgramWithCommandsAndAction(t *testing.T) {
 	p.After = nilFunction
 	for _, tc := range testCases {
 		t.Run(fmt.Sprintf("with successful After -> %s", tc.description), func(t *testing.T) {
-			printUsage, err := p.run(ctx, tc.args)
-			compareErrors(t, err, tc.expectedErr)
-
-			if printUsage != tc.shouldPrintUsage {
-				t.Fatalf("expected printUsage to be %t got %t", tc.shouldPrintUsage, printUsage)
-			}
+			p.doTestRun(t, tc)
 		})
 	}
 
@@ -267,24 +288,7 @@ func TestProgramWithCommandsAndAction(t *testing.T) {
 	p.After = errFunction
 	for _, tc := range testCases {
 		t.Run(fmt.Sprintf("with error on After -> %s", tc.description), func(t *testing.T) {
-			printUsage, err := p.run(ctx, tc.args)
-			// When we print the usage for nil and empty, we never hit
-			// the After function.
-			if !tc.shouldPrintUsage {
-				// If we are at the point where the command should fail, we should
-				// expect that error.
-				if tc.expectedErr == errExpectedFromCommand {
-					compareErrors(t, err, errExpectedFromCommand)
-				} else {
-					compareErrors(t, err, errExpected)
-				}
-			} else {
-				compareErrors(t, err, tc.expectedErr)
-			}
-
-			if printUsage != tc.shouldPrintUsage {
-				t.Fatalf("expected printUsage to be %t got %t", tc.shouldPrintUsage, printUsage)
-			}
+			p.doTestRun(t, tc)
 		})
 	}
 
@@ -292,18 +296,7 @@ func TestProgramWithCommandsAndAction(t *testing.T) {
 	p.Before = errFunction
 	for _, tc := range testCases {
 		t.Run(fmt.Sprintf("with error on Before -> %s", tc.description), func(t *testing.T) {
-			printUsage, err := p.run(ctx, tc.args)
-			// When we print the usage for nil and empty, we never hit
-			// the After function.
-			if !tc.shouldPrintUsage {
-				compareErrors(t, err, errExpected)
-			} else {
-				compareErrors(t, err, tc.expectedErr)
-			}
-
-			if printUsage != tc.shouldPrintUsage {
-				t.Fatalf("expected printUsage to be %t got %t", tc.shouldPrintUsage, printUsage)
-			}
+			p.doTestRun(t, tc)
 		})
 	}
 }
@@ -314,94 +307,13 @@ func TestProgramWithCommands(t *testing.T) {
 		&errorCommand{},
 		&testCommand{},
 	}
-	testCases := []struct {
-		description      string
-		args             []string
-		shouldPrintUsage bool
-		expectedErr      error
-	}{
-		{
-			description:      "nil",
-			shouldPrintUsage: true,
-		},
-		{
-			description:      "empty",
-			args:             []string{},
-			shouldPrintUsage: true,
-		},
-		{
-			description:      "args: foo",
-			args:             []string{"foo"},
-			shouldPrintUsage: true,
-		},
-		{
-			description:      "args: foo bar",
-			args:             []string{"foo", "bar"},
-			shouldPrintUsage: true,
-			expectedErr:      errors.New("bar: no such command"),
-		},
-		{
-			description:      "args: foo test",
-			args:             []string{"foo", "test"},
-			shouldPrintUsage: false,
-		},
-		{
-			description:      "args: foo test foo",
-			args:             []string{"foo", "test", "foo"},
-			shouldPrintUsage: false,
-		},
-		{
-			description:      "args: foo test foo bar",
-			args:             []string{"foo", "test", "foo", "bar"},
-			shouldPrintUsage: false,
-		},
-		{
-			description:      "args: foo error",
-			args:             []string{"foo", "error"},
-			shouldPrintUsage: false,
-			expectedErr:      errExpectedFromCommand,
-		},
-		{
-			description:      "args: foo error foo",
-			args:             []string{"foo", "error", "foo"},
-			shouldPrintUsage: false,
-			expectedErr:      errExpectedFromCommand,
-		},
-		{
-			description:      "args: foo error foo bar",
-			args:             []string{"foo", "error", "foo", "bar"},
-			shouldPrintUsage: false,
-			expectedErr:      errExpectedFromCommand,
-		},
-		{
-			description:      "args: foo version",
-			args:             []string{"foo", "version"},
-			shouldPrintUsage: false,
-		},
-		{
-			description:      "args: foo version foo",
-			args:             []string{"foo", "version", "foo"},
-			shouldPrintUsage: false,
-		},
-		{
-			description:      "args: foo version foo bar",
-			args:             []string{"foo", "version", "foo", "bar"},
-			shouldPrintUsage: false,
-		},
-	}
-
-	// Create the context with the values we need to pass to the version command.
-	ctx := context.WithValue(context.Background(), GitCommitKey, p.GitCommit)
-	ctx = context.WithValue(ctx, VersionKey, p.Version)
+	testCases := append(append(testCasesEmpty(),
+		testCasesUndefinedCommand()...),
+		testCasesWithCommands()...)
 
 	for _, tc := range testCases {
 		t.Run(tc.description, func(t *testing.T) {
-			printUsage, err := p.run(ctx, tc.args)
-			compareErrors(t, err, tc.expectedErr)
-
-			if printUsage != tc.shouldPrintUsage {
-				t.Fatalf("expected printUsage to be %t got %t", tc.shouldPrintUsage, printUsage)
-			}
+			p.doTestRun(t, tc)
 		})
 	}
 
@@ -409,12 +321,7 @@ func TestProgramWithCommands(t *testing.T) {
 	p.Before = nilFunction
 	for _, tc := range testCases {
 		t.Run(fmt.Sprintf("with Successful Before -> %s", tc.description), func(t *testing.T) {
-			printUsage, err := p.run(ctx, tc.args)
-			compareErrors(t, err, tc.expectedErr)
-
-			if printUsage != tc.shouldPrintUsage {
-				t.Fatalf("expected printUsage to be %t got %t", tc.shouldPrintUsage, printUsage)
-			}
+			p.doTestRun(t, tc)
 		})
 	}
 
@@ -422,12 +329,7 @@ func TestProgramWithCommands(t *testing.T) {
 	p.After = nilFunction
 	for _, tc := range testCases {
 		t.Run(fmt.Sprintf("with successful After -> %s", tc.description), func(t *testing.T) {
-			printUsage, err := p.run(ctx, tc.args)
-			compareErrors(t, err, tc.expectedErr)
-
-			if printUsage != tc.shouldPrintUsage {
-				t.Fatalf("expected printUsage to be %t got %t", tc.shouldPrintUsage, printUsage)
-			}
+			p.doTestRun(t, tc)
 		})
 	}
 
@@ -435,24 +337,7 @@ func TestProgramWithCommands(t *testing.T) {
 	p.After = errFunction
 	for _, tc := range testCases {
 		t.Run(fmt.Sprintf("with error on After -> %s", tc.description), func(t *testing.T) {
-			printUsage, err := p.run(ctx, tc.args)
-			// When we print the usage for nil and empty, we never hit
-			// the After function.
-			if !tc.shouldPrintUsage {
-				// If we are at the point where the command should fail, we should
-				// expect that error.
-				if tc.expectedErr == errExpectedFromCommand {
-					compareErrors(t, err, errExpectedFromCommand)
-				} else {
-					compareErrors(t, err, errExpected)
-				}
-			} else {
-				compareErrors(t, err, tc.expectedErr)
-			}
-
-			if printUsage != tc.shouldPrintUsage {
-				t.Fatalf("expected printUsage to be %t got %t", tc.shouldPrintUsage, printUsage)
-			}
+			p.doTestRun(t, tc)
 		})
 	}
 
@@ -460,18 +345,7 @@ func TestProgramWithCommands(t *testing.T) {
 	p.Before = errFunction
 	for _, tc := range testCases {
 		t.Run(fmt.Sprintf("with error on Before -> %s", tc.description), func(t *testing.T) {
-			printUsage, err := p.run(context.Background(), tc.args)
-			// When we print the usage for nil and empty, we never hit
-			// the After function.
-			if !tc.shouldPrintUsage {
-				compareErrors(t, err, errExpected)
-			} else {
-				compareErrors(t, err, tc.expectedErr)
-			}
-
-			if printUsage != tc.shouldPrintUsage {
-				t.Fatalf("expected printUsage to be %t got %t", tc.shouldPrintUsage, printUsage)
-			}
+			p.doTestRun(t, tc)
 		})
 	}
 }
@@ -490,4 +364,125 @@ func compareErrors(t *testing.T, err, expectedErr error) {
 	}
 
 	return
+}
+
+type capture struct {
+	stdout, stderr *os.File
+	ro, re         *os.File
+	wo, we         *os.File
+	co, ce         chan string
+}
+
+func startCapture(t *testing.T) capture {
+	c := capture{
+		stdout: os.Stdout,
+		stderr: os.Stderr,
+	}
+
+	// Pipe it to a reader and writer.
+	var err error
+	c.ro, c.wo, err = os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	os.Stdout = c.wo
+	c.re, c.we, err = os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	os.Stderr = c.we
+
+	return c
+}
+
+func (c *capture) finish() (string, string) {
+	defer c.ro.Close()
+	defer c.re.Close()
+
+	// Copy the output in a separate goroutine so printing can't block indefinitely.
+	c.co = make(chan string)
+	go func() {
+		var buf bytes.Buffer
+		io.Copy(&buf, c.ro)
+		c.co <- buf.String()
+	}()
+	c.ce = make(chan string)
+	go func() {
+		var buf bytes.Buffer
+		io.Copy(&buf, c.re)
+		c.ce <- buf.String()
+	}()
+
+	// Close everything.
+	c.wo.Close()
+	c.we.Close()
+
+	// Reset.
+	os.Stdout = c.stdout
+	os.Stderr = c.stderr
+
+	o := <-c.co
+	e := <-c.ce
+	return o, e
+}
+
+func (p *Program) isErrorOnBefore() bool {
+	return p.Before != nil && p.Before(context.Background()) != nil
+}
+
+func (p *Program) isErrorOnAfter() bool {
+	return p.After != nil && p.After(context.Background()) != nil
+}
+
+func (p *Program) doTestRun(t *testing.T, tc testCase) {
+	// Create the context with the values we need to pass to the version command.
+	ctx := context.WithValue(context.Background(), GitCommitKey, p.GitCommit)
+	ctx = context.WithValue(ctx, VersionKey, p.Version)
+
+	c := startCapture(t)
+	printUsage, err := p.run(ctx, tc.args)
+	stdout, _ := c.finish()
+
+	// IF
+	// we DON'T EXPECT and error on Before
+	// AND
+	// we EXPECT the version to be printed
+	// THEN
+	// check that the version was actually printed.
+	if !p.isErrorOnBefore() &&
+		tc.shouldPrintVersion && !strings.HasPrefix(stdout, versionExpected) {
+		t.Fatalf("expected output to start with %q, got %q", versionExpected, stdout)
+	}
+
+	// IF
+	// we DON'T EXPECT an error on Before OR After
+	// OR
+	// we EXPECT the usage to be printed (<nil> or empty)
+	// OR
+	// we DON'T EXPECT an error on Before but we EXPECT an error on After AND the command was EXPECTED to error
+	// THEN
+	// check we got the expected error defined in the testcase.
+	if (!p.isErrorOnAfter() && !p.isErrorOnBefore()) ||
+		tc.shouldPrintUsage ||
+		(!p.isErrorOnBefore() && p.isErrorOnAfter() && tc.expectedErr == errExpectedFromCommand) {
+		compareErrors(t, err, tc.expectedErr)
+	}
+
+	// IF
+	// we EXPECT an error on Before
+	// OR
+	// we EXPECT an error on After AND the command was NOT EXPECTED to error
+	// AND
+	// we DON'T EXPECT the usage to be printed (<nil> or empty)
+	// THEN
+	// check we got the expected error from Before/After.
+	if (p.isErrorOnBefore() ||
+		(p.isErrorOnAfter() && tc.expectedErr != errExpectedFromCommand)) &&
+		!tc.shouldPrintUsage {
+		compareErrors(t, err, errExpected)
+	}
+
+	if printUsage != tc.shouldPrintUsage {
+		t.Fatalf("expected printUsage to be %t got %t", tc.shouldPrintUsage, printUsage)
+	}
 }
