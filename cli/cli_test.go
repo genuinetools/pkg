@@ -179,12 +179,12 @@ func testCasesHelp() []testCase {
 			args:        []string{"foo", "error", "foo", "bar", "--help"},
 		},
 		{
-			description: "args: foo version foo --help",
-			args:        []string{"foo", "version", "foo", "--help"},
+			description: "args: foo version --help",
+			args:        []string{"foo", "version", "--help"},
 		},
 		{
-			description: "args: foo version foo bar -h",
-			args:        []string{"foo", "version", "foo", "bar", "-h"},
+			description: "args: foo version -h",
+			args:        []string{"foo", "version", "-h"},
 		},
 	}
 }
@@ -314,6 +314,7 @@ func TestProgramWithNoCommandsOrFlags(t *testing.T) {
 
 func TestProgramHelpFlag(t *testing.T) {
 	p := NewProgram()
+	p.FlagSet = flag.NewFlagSet("global", flag.ContinueOnError)
 	testCases := testCasesHelp()
 
 	for _, tc := range testCases {

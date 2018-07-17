@@ -111,15 +111,12 @@ func (p *Program) run(ctx context.Context, args []string) (bool, error) {
 	// OR
 	// args is less than zero
 	// OR
-	// args contains a help flag
-	// OR
-	// we have more than one arg and it equals help
+	// we have more than one arg and it equals help OR is a help flag
 	// THEN
 	// printUsage
 	if args == nil ||
 		len(args) < 1 ||
-		contains([]string{"-h", "--help"}, args) ||
-		(len(args) > 1 && args[1] == "help") {
+		(len(args) > 1 && contains([]string{"-h", "--help", "help"}, args[1])) {
 		return true, nil
 	}
 
@@ -374,14 +371,11 @@ func in(a string, c []Command) bool {
 	return false
 }
 
-func contains(match, a []string) bool {
-	// Iterate over the items in the slice.
-	for _, s := range a {
-		// Iterate over the items to match.
-		for _, m := range match {
-			if s == m {
-				return true
-			}
+func contains(match []string, s string) bool {
+	// Iterate over the items to match.
+	for _, m := range match {
+		if s == m {
+			return true
 		}
 	}
 	return false
