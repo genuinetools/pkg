@@ -155,7 +155,7 @@ func (p *Program) run(ctx context.Context, args []string) error {
 		return fmt.Errorf("%s: no such command", args[1])
 	}
 
-	// If we are not running a commands we know, then automatically
+	// If we are not running a command we know, then automatically
 	// run the main action of the program instead.
 	// Also enter this loop if we weren't passed any arguments.
 	if p.Action != nil &&
