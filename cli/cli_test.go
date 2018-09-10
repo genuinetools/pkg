@@ -45,7 +45,7 @@ var (
 		return errExpected
 	}
 
-	versionCommandExpectedStdout = fmt.Sprintf(`ship:
+	versionCommandExpectedStdout = fmt.Sprintf(`yo:
  version     : 0.0.0
  git hash    :`+" "+`
  go version  : %s
@@ -174,6 +174,7 @@ Flags:
 
 func TestProgramWithNoCommandsOrFlagsOrAction(t *testing.T) {
 	p := NewProgram()
+	p.Name = "yo"
 	testCases := append(testCasesEmpty(), testCasesUndefinedCommand()...)
 
 	for _, tc := range testCases {
@@ -185,6 +186,7 @@ func TestProgramWithNoCommandsOrFlagsOrAction(t *testing.T) {
 
 func TestProgramWithNoCommandsOrFlags(t *testing.T) {
 	p := NewProgram()
+	p.Name = "yo"
 	p.Action = nilActionFunction
 	testCases := append(testCasesEmpty(), testCasesWithAction()...)
 
@@ -197,6 +199,7 @@ func TestProgramWithNoCommandsOrFlags(t *testing.T) {
 
 func TestProgramHelpFlag(t *testing.T) {
 	p := NewProgram()
+	p.Name = "yo"
 	p.FlagSet = flag.NewFlagSet("global", flag.ContinueOnError)
 	p.Commands = []Command{
 		&testCommand{},
@@ -222,6 +225,7 @@ func TestProgramHelpFlag(t *testing.T) {
 
 func TestProgramWithCommandsAndAction(t *testing.T) {
 	p := NewProgram()
+	p.Name = "yo"
 	p.Commands = []Command{
 		&errorCommand{},
 		&testCommand{},
@@ -272,6 +276,7 @@ func TestProgramWithCommandsAndAction(t *testing.T) {
 
 func TestProgramWithCommands(t *testing.T) {
 	p := NewProgram()
+	p.Name = "yo"
 	p.Commands = []Command{
 		&errorCommand{},
 		&testCommand{},
