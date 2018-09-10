@@ -41,11 +41,11 @@ type Program struct {
 	// Before defines a function to execute before any subcommands are run,
 	// but after the context is ready.
 	// If a non-nil error is returned, no subcommands are run.
-	Before func(context.Context) error
+	Before func(context.Context, Command) error
 	// After defines a function to execute after any commands or action is run
 	// and has finished.
 	// It is run _only_ if the subcommand exits without an error.
-	After func(context.Context) error
+	After func(context.Context, Command) error
 
 	// Action is the function to execute when no subcommands are specified.
 	// It gives the user back the arguments after the flags have been parsed.
@@ -168,7 +168,7 @@ func (p *Program) run(ctx context.Context, args []string) error {
 		// Run the main action _if_ we are not in the loop for the version command
 		// that is added by default.
 		if p.Before != nil {
-			if err := p.Before(ctx); err != nil {
+			if err := p.Before(ctx, nil); err != nil {
 				return err
 			}
 		}
@@ -201,7 +201,7 @@ func (p *Program) run(ctx context.Context, args []string) error {
 		// Only execute the Before function for user-supplied commands.
 		// This excludes the version command we supply.
 		if p.Before != nil && command.Name() != "version" {
-			if err := p.Before(ctx); err != nil {
+			if err := p.Before(ctx, command); err != nil {
 				return err
 			}
 		}
@@ -214,7 +214,7 @@ func (p *Program) run(ctx context.Context, args []string) error {
 
 	// Run the after function.
 	if p.After != nil {
-		if err := p.After(ctx); err != nil {
+		if err := p.After(ctx, command); err != nil {
 			return err
 		}
 	}
